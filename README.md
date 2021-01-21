@@ -1,5 +1,5 @@
-Tired of Moodle's clunky UI for adding questions when all you need is simple multiple choice questions with a single correct answer?
-This is for you. Write your questions, fast, in Excel, LibreOffice Calc or any other spreadsheet program and save the questions as a Tab Seperated Value (TSV) file.
+**Tired of Moodle's clunky UI for adding questions when all you need is simple multiple choice questions with a single correct answer?
+This is for you.** Write your questions, fast, in Excel, LibreOffice Calc or any other spreadsheet program and save the questions as a Tab Seperated Value (TSV) file.
 
 Then convert that TSV file to something Moodle can understand with this service.
 

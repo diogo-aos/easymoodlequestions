@@ -2,6 +2,7 @@ module Main exposing (..)
 
 import Browser
 import File exposing (File)
+import File.Download as Download
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
@@ -81,8 +82,9 @@ update msg model =
         CsvLoaded content ->
             let
                 converted = convertCsvMultipleChoice model.sep False content
+                cmd = Download.string "questions.xml" "text/xml" converted
             in
-            ( { model | info = "converted:" ++ converted }, Cmd.none )
+            ( { model | info = "converted:" ++ converted }, cmd )
 
             
 read : File -> Cmd Msg
@@ -101,7 +103,7 @@ convertCsvMultipleChoice sep hasHeader text =
                   else
                       lines
     in
-        String.join "" (List.map (\l -> csvLineToQuestion sep l) content)
+        String.replace "{{questions}}" (String.join "" (List.map (\l -> csvLineToQuestion sep l) content)) quizTemplate
 
 csvLineToQuestion : String -> String -> String
 csvLineToQuestion sep line =
@@ -155,6 +157,13 @@ multipleChoiceQuestionTemplate question = """
 """
 
 
+quizTemplate : String
+quizTemplate = """<?xml version="1.0" ?>
+<quiz>
+{{questions}}
+</quiz>
+"""
+    
 
 
 

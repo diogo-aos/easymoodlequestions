@@ -5402,6 +5402,7 @@ var $author$project$Main$csvLineToQuestion = F2(
 		}();
 		return result;
 	});
+var $author$project$Main$quizTemplate = '<?xml version="1.0" ?>\n<quiz>\n{{questions}}\n</quiz>\n';
 var $elm$core$List$tail = function (list) {
 	if (list.b) {
 		var x = list.a;
@@ -5427,15 +5428,19 @@ var $author$project$Main$convertCsvMultipleChoice = F3(
 				return lines;
 			}
 		}();
-		return A2(
-			$elm$core$String$join,
-			'',
+		return A3(
+			$elm$core$String$replace,
+			'{{questions}}',
 			A2(
-				$elm$core$List$map,
-				function (l) {
-					return A2($author$project$Main$csvLineToQuestion, sep, l);
-				},
-				content));
+				$elm$core$String$join,
+				'',
+				A2(
+					$elm$core$List$map,
+					function (l) {
+						return A2($author$project$Main$csvLineToQuestion, sep, l);
+					},
+					content)),
+			$author$project$Main$quizTemplate);
 	});
 var $author$project$Main$CsvLoaded = function (a) {
 	return {$: 'CsvLoaded', a: a};
@@ -5451,6 +5456,13 @@ var $author$project$Main$read = function (file) {
 		$author$project$Main$CsvLoaded,
 		$elm$file$File$toString(file));
 };
+var $elm$file$File$Download$string = F3(
+	function (name, mime, content) {
+		return A2(
+			$elm$core$Task$perform,
+			$elm$core$Basics$never,
+			A3(_File_download, name, mime, content));
+	});
 var $author$project$Main$update = F2(
 	function (msg, model) {
 		switch (msg.$) {
@@ -5475,11 +5487,12 @@ var $author$project$Main$update = F2(
 			default:
 				var content = msg.a;
 				var converted = A3($author$project$Main$convertCsvMultipleChoice, model.sep, false, content);
+				var cmd = A3($elm$file$File$Download$string, 'questions.xml', 'text/xml', converted);
 				return _Utils_Tuple2(
 					_Utils_update(
 						model,
 						{info: 'converted:' + converted}),
-					$elm$core$Platform$Cmd$none);
+					cmd);
 		}
 	});
 var $author$project$Main$ChangedSeperator = function (a) {
