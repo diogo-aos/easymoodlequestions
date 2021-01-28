@@ -1,5 +1,5 @@
 elm-stuff/
 *~
-index.html
-*.js
 testing_data/
+/elm.js
+/index.html
