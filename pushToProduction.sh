@@ -8,4 +8,4 @@ cp elm.js docs/
 git add -A
 git commit -m "pushing to production"
 
-git push origin master:gh-pages
+git push -f origin master:gh-pages
