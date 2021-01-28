@@ -1,1 +1,1 @@
-git push origin masergh-pages
+git push origin master:gh-pages
