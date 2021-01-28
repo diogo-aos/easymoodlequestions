@@ -2,55 +2,82 @@ module Main exposing (..)
 
 import Browser
 import File exposing (File)
+import File.Select
 import File.Download as Download
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
 import Json.Decode as D
-
 import Task
 
+
+{-
+import Element exposing (..)
+import Element.Background as Background
+import Element.Border as Border
+import Element.Font as Font
+import Element.Input as Input
+import Element.Region as Region
+-}
 {-
 
-TODO
+   TODO
 
-- create downlaod functionality
+
 
 -}
-
 -- MAIN
 
 
 main =
-  Browser.element
-    { init = init
-    , view = view
-    , update = update
-    , subscriptions = subscriptions
-    }
+    Browser.element
+        { init = init
+        , view = view
+        , update = update
+        , subscriptions = subscriptions
+        }
 
 
 
 -- MODEL
 
 
-type alias Model =
-    { files : List File
-    , sep : String
-    , info : String
+type alias Conversion = 
+    { file: File
+    , questions: List Question
+    , errors: List String
+    , result: String
     }
 
-
-initialModel : Model
-initialModel =
-    { files = []
-    , sep = ","
-    , info = ""
+newConversion : File -> Conversion
+newConversion file =
+    { file = file
+    , questions = []
+    , errors = []
+    , result = ""
     }
     
-init : () -> (Model, Cmd Msg)
+    
+type alias Model =
+    { log : List String
+    , files : List File
+    , sep : String
+    , conversions : List Conversion
+    }
+
+
+init : () -> ( Model, Cmd Msg )
 init _ =
-  ( initialModel, Cmd.none )
+    let
+        initialModel : Model
+        initialModel =
+            { log = []
+            , files = []
+            , sep = "\t"
+            , conversions = []
+            }
+    in
+        ( initialModel, Cmd.none )
 
 
 
@@ -58,146 +85,264 @@ init _ =
 
 
 type Msg
-    = GotFiles (List File)
+    = RequestFiles
+    | GotFiles File (List File)
     | ClickedConvert
-    | CsvLoaded String
+    | ClickedDownload
+    | CsvLoaded File String
     | ChangedSeperator String
 
 
-update : Msg -> Model -> (Model, Cmd Msg)
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        GotFiles files ->
-            ( { model | files = files, info = "loaded files" }, Cmd.none )
+        RequestFiles ->
+            ( model, requestFiles )
+        
+        GotFiles file otherFiles ->
+            ( { model |
+                files = file :: otherFiles
+              , log = (model.log ++ ["loaded files"])
+              }
+            , Cmd.none )
 
         ChangedSeperator newSep ->
-            ( { model | sep = newSep }, Cmd.none )
+            ( { model | sep = newSep, log = (model.log ++ ["changed sep to " ++ newSep]) }, Cmd.none )
 
         ClickedConvert ->
             let
-                cmd = Cmd.batch (List.map read model.files)
+                cmd =
+                    Cmd.batch (List.map readFile model.files)
             in
-                ( model, cmd)
+            ( model, cmd )
 
-        CsvLoaded content ->
+        ClickedDownload ->
             let
-                converted = convertCsvMultipleChoice model.sep False content
-                cmd = Download.string "questions.xml" "text/xml" converted
+                downloadCmds = Cmd.batch
+                               (List.indexedMap
+                                    (\i c -> Download.string ("questions" ++ String.fromInt i ++ ".xml") "text/xml" c.result)
+                                    model.conversions
+                               )
             in
-            ( { model | info = "converted:" ++ converted }, cmd )
+                (model, downloadCmds)
 
-            
-read : File -> Cmd Msg
-read file =
-    Task.perform CsvLoaded (File.toString file)
+        CsvLoaded file content ->
+            let
+                (questions, errors) = parseCsvMultipleChoiceFile model.sep True content
+                moodleXml = buildMoodleXml questions
+            in
+            ( { model |
+                conversions = model.conversions ++ [Conversion  file questions errors moodleXml]
+              , log = (model.log ++ ["converted:" ++ moodleXml] ++ ["\nerrors:" ++ (String.join "\n" errors)])
+              }, Cmd.none )
 
 
-convertCsvMultipleChoice: String -> Bool -> String -> String
-convertCsvMultipleChoice sep hasHeader text =
+requestFiles : Cmd Msg
+requestFiles =
+  File.Select.files ["text"] GotFiles
+
+
+buildMoodleXml : List Question -> String
+buildMoodleXml questions =
+    String.replace "{{questions}}" (String.join "" (List.map multipleChoiceQuestionTemplate questions)) quizTemplate
+                
+readFile : File -> Cmd Msg
+readFile file =
+    Task.perform (CsvLoaded file) (File.toString file)
+
+
+parseCsvMultipleChoiceFile : String -> Bool -> String -> (List Question, List String)
+parseCsvMultipleChoiceFile sep hasHeader text =
     let
         lines = String.split "\n" text
-        content = if hasHeader then
-                      case List.tail lines of
-                          Nothing -> []
-                          Just l -> l
-                  else
-                      lines
+        content : List String
+        content =
+            if hasHeader then
+                case List.tail lines of
+                    Nothing ->
+                        []
+                    Just l ->
+                        l
+            else
+                lines
+        resultQuestions : List (Result String Question)
+        resultQuestions = List.map (\l -> parseSingleCsvLine sep l) content
+        appendQuestionError : Result String Question -> (List Question, List String) -> (List Question, List String)
+        appendQuestionError = (\resultQ (qList, eList) -> case resultQ of
+                                  Err error -> (qList, error :: eList)
+                                  Ok q -> (q :: qList, eList) )
+        res = List.foldr appendQuestionError ([], []) resultQuestions
     in
-        String.replace "{{questions}}" (String.join "" (List.map (\l -> csvLineToQuestion sep l) content)) quizTemplate
+        res
 
-csvLineToQuestion : String -> String -> String
-csvLineToQuestion sep line =
+
+        
+parseSingleCsvLine : String -> String -> Result String Question
+parseSingleCsvLine sep line =
     let
-        fields = String.split sep line
+        fields =
+            String.split sep line
+
         result =
             case fields of
-                (question :: correct :: answers) ->
+                question :: correct :: answers ->
                     case String.toInt correct of
-                        Nothing -> ""
-                        Just correctInt -> questionToXml question correctInt answers
-                    
-                _ -> ""
+                        Nothing -> Err <| "could not convert correct answer to a number in this line [" ++ line ++ "]"
+
+                        Just correctInt -> Ok (Question question correctInt answers)
+                _ ->
+                    Err <| "missing fields in this line [" ++ line ++ "]"
     in
         result
 
-questionToXml : String -> Int -> List String -> String
-questionToXml question correct answers =
-    let
-        
-        answerLst = List.indexedMap (\ i a -> multipleChoiceAnswerTemplate a (i == correct-1)) answers
-        answersStr = String.join "" answerLst
-
-    in
-        String.replace "{{answers}}" answersStr (multipleChoiceQuestionTemplate question)
+type alias Question =
+    { question : String
+    , correct : Int
+    , answers: List String
+    }
+    
+            
 
 
-multipleChoiceAnswerTemplate : String  -> Bool -> String
-multipleChoiceAnswerTemplate text correct= """
-     <answer fraction=\"""" ++ (if correct then "100" else "0" ) ++ """\">
-       <text>""" ++ text ++ """</text>
-       <feedback><text>""" ++ (if correct then "Correcto!" else "Incorrecto." ) ++ """</text></feedback>
+multipleChoiceAnswerTemplate : String -> Bool -> String
+multipleChoiceAnswerTemplate text correct =
+    """
+     <answer fraction=\""""
+        ++ (if correct then
+                "100"
+
+            else
+                "0"
+           )
+        ++ """">
+       <text>"""
+        ++ text
+        ++ """</text>
+       <feedback><text>"""
+        ++ (if correct then
+                "Correcto!"
+
+            else
+                "Incorrecto."
+           )
+        ++ """</text></feedback>
      </answer>
 """
-    
 
 
-multipleChoiceQuestionTemplate : String -> String
-multipleChoiceQuestionTemplate question = """
+multipleChoiceQuestionTemplate : Question -> String
+multipleChoiceQuestionTemplate question =
+    let
+        answerLst =
+            List.indexedMap (\i a -> multipleChoiceAnswerTemplate a (i == question.correct - 1)) question.answers
+        answersStr =
+            String.join "" answerLst
+    in
+    """
 <question type="multichoice">
      <name>
-         <text>""" ++ question ++ """</text>
+         <text>""" ++ question.question ++ """</text>
      </name>
      <questiontext format="html">
-         <text>""" ++ question ++ """</text>
+         <text>""" ++ question.question ++ """</text>
      </questiontext>
-
-     {{answers}}
-
+""" ++ answersStr ++ """
  </question>
 """
 
 
 quizTemplate : String
-quizTemplate = """<?xml version="1.0" ?>
+quizTemplate =
+    """<?xml version="1.0" ?>
 <quiz>
 {{questions}}
 </quiz>
 """
-    
-
-
 
 
 
 -- SUBSCRIPTIONS
+
+
 subscriptions : Model -> Sub Msg
 subscriptions model =
-  Sub.none
+    Sub.none
 
 
 
 -- VIEW
 
-
 view : Model -> Html Msg
 view model =
-  div []
-    [ label [] [ text model.info ]
-    , input
-        [ type_ "file"
-        , multiple True
-        , on "change" (D.map GotFiles filesDecoder)
+    div []
+        [ div [ id "log" ]
+              ((List.map (\info -> p [] [text info]) model.log ) ++ [p [] [ text (Debug.toString model) ]])
+        , header
+        , middle model
+        , reviewView model
+        , footer
         ]
-        []
-    , div []
-        [ label [] [ text "separator, e.g. , or tab" ]
-        , input [ type_ "text", onInput ChangedSeperator ]  []
+
+sepSelector : Model -> Html Msg
+sepSelector model =
+    div []
+        [ select [onInput ChangedSeperator]
+              [ option [value ","] [text "comma ,"]
+              , option [value "\t"] [text "tab "]
+              ]
         ]
-    , button [ onClick ClickedConvert ] [ text "convert" ]
-    , div [] [ text (Debug.toString model) ]
-    ]
+
+reviewConvertionResult : String -> List (Html Msg)
+reviewConvertionResult res =
+    []
+        
+reviewConvertion : {file: File, result: String} -> Html Msg
+reviewConvertion c =
+    div []
+        [ h2 [] [ text (File.name c.file) ]
+              
+        ]
+        
+reviewView : Model -> Html Msg
+reviewView model =
+    div [] []
+
+header : Html Msg
+header =
+    div [ id "header" ]
+        [ h1 [ id "headerTitle" ] [ text "Easy Moodle Questions" ]
+        ]
+
+
+
+middle : Model -> Html Msg
+middle model =
+    div [ id "content" ]
+        [ button
+              [ onClick RequestFiles ]
+              [ text "upload files" ]
+--         , input
+--              [ type_ "file"
+--              , multiple True
+--              , on "change" (D.map GotFiles filesDecoder)
+--              ]
+--              []
+        , div []
+            [ label [] [ text "separator, e.g. , or tab" ]
+            , input [ type_ "text", value model.sep, onInput ChangedSeperator ] []
+            ]
+        , button [ onClick ClickedConvert ] [ text "convert" ]
+        , button [ onClick ClickedDownload ] [ text "download" ]
+        ]
+
+
+footer : Html Msg
+footer =
+    div [ id "footer" ]
+        [ text "diogoaos"
+        ]
 
 
 filesDecoder : D.Decoder (List File)
 filesDecoder =
-  D.at ["target","files"] (D.list File.decoder)
+    D.at [ "target", "files" ] (D.list File.decoder)
