@@ -4,22 +4,21 @@ import Browser
 import File exposing (File)
 import File.Download as Download
 import File.Select
-import Html exposing (..)
-import Html.Attributes exposing (..)
-import Html.Events exposing (..)
 import Json.Decode as D
 import Task
 
+import Html exposing (..)
+import Html.Attributes exposing (..)
+import Html.Events exposing (..)
 
 
-{-
-   import Element exposing (..)
-   import Element.Background as Background
-   import Element.Border as Border
-   import Element.Font as Font
-   import Element.Input as Input
-   import Element.Region as Region
--}
+import Element as E
+import Element.Background as Background
+import Element.Border as Border
+import Element.Font as Font
+import Element.Input as Input
+import Element.Region as Region
+
 {-
 
    TODO
@@ -38,7 +37,7 @@ main =
         , subscriptions = subscriptions
         }
 
-
+ 
 
 -- MODEL
 
@@ -298,12 +297,90 @@ subscriptions model =
 
 -- VIEW
 
+blue =
+    E.rgb255 238 238 238
+
+purple =
+    E.rgb255 238 238 150
+
+
 
 view : Model -> Html Msg
 view model =
+    E.layout
+        [ Font.size 20
+        ]
+        <|
+        E.column
+            [ E.centerX
+            , E.centerY
+            ]
+            <|
+            List.append
+            [ E.el [Region.heading 1, Font.size 40] (E.text "Easy Moodle Questions")
+            , uploadFilesButton
+            , chooseSep model
+            , E.row [ E.centerX]
+                [
+                 Input.button
+                    [ E.centerX
+                    , Background.color blue
+                    , E.padding 10
+                    ]
+                    { onPress = Just ClickedConvert
+                    , label = E.text "Convert"
+                    }
+                , Input.button
+                    [ E.centerX
+                    , Background.color blue
+                    , E.padding 10
+                    ]
+                    { onPress = Just ClickedDownload
+                    , label = E.text "Download"
+                  }
+                ]
+            ]
+            (List.map (\info -> E.text info) model.log )
+
+
+
+uploadFilesButton : E.Element Msg
+uploadFilesButton =
+    Input.button
+        [ Background.color blue
+        , E.focused
+              [ Background.color purple ]
+        , E.centerX
+        , E.padding 10
+        ]
+    { onPress = Just RequestFiles
+    , label = E.text "Upload files"
+    }
+    
+    
+    
+chooseSep : Model -> E.Element Msg
+chooseSep model =
+    Input.radio
+        [ E.padding 10
+        , E.spacing 20
+        ]
+    { onChange = ChangedSeperator
+    , selected = Just model.sep
+    , label = Input.labelAbove [] (E.text "Choose seperator between fields:")
+    , options =
+          [ Input.option "\t" (E.text "Tab")
+          , Input.option "," (E.text ",")
+          , Input.option "custom" (E.text "custom")
+          ]
+    }
+    
+    
+view2 : Model -> Html Msg
+view2 model =
     div []
         [ div [ id "log" ]
-            (List.map (\info -> p [] [ text info ]) model.log ++ [ p [] [ text (Debug.toString model) ] ])
+              (List.map (\info -> p [] [ text info ]) model.log ++ [ p [] [ text (Debug.toString model) ] ])
         , header
         , middle model
         , reviewView model
