@@ -92,6 +92,8 @@ type Msg
     | ClickedDownload
     | CsvLoaded File String
     | ChangedSeperator String
+    | ClickedDownloadOpenOfficeTemplate
+    | ClickedDownloadExcelTemplate
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -143,6 +145,19 @@ update msg model =
               }
             , Cmd.none
             )
+
+        ClickedDownloadOpenOfficeTemplate ->
+            let
+                downloadCmd = Download.url "public/template/template.ods"
+            in
+                (model, downloadCmd)
+
+        ClickedDownloadExcelTemplate ->
+            let
+                downloadCmd = Download.url "public/template/template.xlsx"
+            in
+                (model, downloadCmd)
+
 
 
 requestFiles : Cmd Msg
@@ -310,40 +325,67 @@ view model =
     E.layout
         [ Font.size 20
         ]
-        <|
+    <| 
         E.column
-            [ E.centerX
-            , E.centerY
+            [ E.spacing 10
+            , E.width E.fill
+            , E.height E.fill
             ]
-            <|
-            List.append
-            [ E.el [Region.heading 1, Font.size 40] (E.text "Easy Moodle Questions")
-            , uploadFilesButton
+            [ header
+            , body model
+            , footer
+            ]
+
+
+header : E.Element Msg
+header =
+    E.column
+        [ E.alignTop
+        , E.centerX
+        , E.padding 30
+        ]
+        [ E.el [Region.heading 1, Font.size 40] (E.text "Easy Moodle Questions")
+        ]
+
+
+body : Model -> E.Element Msg
+body model =
+    E.column
+        [ E.centerY
+        , E.centerX
+        , E.spacing 10
+        ]
+        <| 
+        List.append
+            [ uploadFilesButton
             , chooseSep model
-            , E.row [ E.centerX]
-                [
-                 Input.button
-                    [ E.centerX
-                    , Background.color blue
-                    , E.padding 10
-                    ]
-                    { onPress = Just ClickedConvert
-                    , label = E.text "Convert"
-                    }
-                , Input.button
-                    [ E.centerX
-                    , Background.color blue
-                    , E.padding 10
-                    ]
-                    { onPress = Just ClickedDownload
-                    , label = E.text "Download"
-                  }
-                ]
+            , E.row
+                  [ E.centerX
+                  , E.spacing 10
+                  ]
+                  [
+                   Input.button
+                       [ E.centerX
+                       , Background.color blue
+                       , E.padding 10
+                       ]
+                       { onPress = Just ClickedConvert
+                       , label = E.text "Convert"
+                       }
+                  , Input.button
+                       [ E.centerX
+                       , Background.color blue
+                       , E.padding 10
+                       ]
+                       { onPress = Just ClickedDownload
+                       , label = E.text "Download"
+                       }
+                  ]
             ]
-            (List.map (\info -> E.text info) model.log )
-
-
-
+    (List.map (\info -> E.text info) model.log )
+        
+        
+        
 uploadFilesButton : E.Element Msg
 uploadFilesButton =
     Input.button
@@ -364,6 +406,7 @@ chooseSep model =
     Input.radio
         [ E.padding 10
         , E.spacing 20
+        , Background.color blue
         ]
     { onChange = ChangedSeperator
     , selected = Just model.sep
@@ -374,18 +417,37 @@ chooseSep model =
           , Input.option "custom" (E.text "custom")
           ]
     }
-    
-    
-view2 : Model -> Html Msg
-view2 model =
-    div []
-        [ div [ id "log" ]
-              (List.map (\info -> p [] [ text info ]) model.log ++ [ p [] [ text (Debug.toString model) ] ])
-        , header
-        , middle model
-        , reviewView model
-        , footer
+
+footer : E.Element Msg
+footer =
+    E.column
+        [ E.centerX ]
+        [ E.text "Download spreadsheet templates"
+        , E.row [ E.spacing 10, E.centerX]
+            [ Input.button
+                  [ E.centerX
+                  , Background.color blue
+                  , E.padding 10
+                  ]
+                  { onPress = Just ClickedDownloadOpenOfficeTemplate
+                  , label = E.text "OpenOffice"
+                  }
+            , Input.button
+                  [ E.centerX
+                  , Background.color blue
+                  , E.padding 10
+                  ]
+                  { onPress = Just ClickedDownloadExcelTemplate
+                  , label = E.text "MS Excel"
+                  }
+            ]
+        , E.el [E.centerX] (E.text "Diogo Silva")
         ]
+            
+
+
+    
+    
 
 
 sepSelector : Model -> Html Msg
@@ -410,17 +472,6 @@ reviewConvertion c =
         ]
 
 
-reviewView : Model -> Html Msg
-reviewView model =
-    div [] []
-
-
-header : Html Msg
-header =
-    div [ id "header" ]
-        [ h1 [ id "headerTitle" ] [ text "Easy Moodle Questions" ]
-        ]
-
 
 middle : Model -> Html Msg
 middle model =
@@ -444,11 +495,6 @@ middle model =
         ]
 
 
-footer : Html Msg
-footer =
-    div [ id "footer" ]
-        [ text "diogoaos"
-        ]
 
 
 filesDecoder : D.Decoder (List File)
